@@ -20,6 +20,8 @@ dependencies = [
     "opencv-python>=4.11.0.86",
     "pillow>=11.3.0",
     "websocket-client>=1.8.0",
+    # ROS 2 native support - replaces rosapi dependency
+    # Note: These require ROS 2 to be installed on the system
 ]
 
 [project.optional-dependencies]

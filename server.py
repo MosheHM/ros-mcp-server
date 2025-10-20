@@ -11,6 +11,7 @@ from PIL import Image as PILImage
 
 from utils.config_utils import get_robot_specifications, parse_robot_config
 from utils.network_utils import ping_ip_and_port
+from utils.ros2_manager import ROS2Manager
 from utils.websocket_manager import WebSocketManager, parse_image, parse_json
 
 # ROS bridge connection settings
@@ -37,6 +38,23 @@ mcp = FastMCP("ros-mcp-server")
 ws_manager = WebSocketManager(
     ROSBRIDGE_IP, ROSBRIDGE_PORT, default_timeout=5.0
 )  # Increased default timeout for ROS operations
+
+# Initialize ROS 2 manager for native introspection
+# This will be used instead of rosapi for graph and parameter queries
+ros2_manager = None  # Lazy initialization on first use
+
+
+def _get_ros2_manager():
+    """Get or initialize the ROS 2 manager."""
+    global ros2_manager
+    if ros2_manager is None:
+        try:
+            ros2_manager = ROS2Manager()
+            ros2_manager.initialize()
+        except Exception as e:
+            # If ROS 2 is not available, return None and fall back to rosapi
+            return None
+    return ros2_manager
 
 
 @mcp.tool(description=("Get robot configuration from YAML file."))
@@ -113,13 +131,24 @@ def connect_to_robot(
     }
 
 
-@mcp.tool(description="Detect the ROS version and distribution via rosbridge.")
+@mcp.tool(description="Detect the ROS version and distribution via native ROS 2 API or rosbridge.")
 def detect_ros_version() -> dict:
     """
-    Detects the ROS version and distro via rosbridge WebSocket.
+    Detects the ROS version and distro via native ROS 2 API or rosbridge WebSocket.
     Returns:
         dict: {'version': <version or '1'>, 'distro': <distro>} or error info.
     """
+    # Try native ROS 2 detection first
+    manager = _get_ros2_manager()
+    if manager:
+        try:
+            version_info = manager.get_ros_version()
+            if version_info and "version" in version_info:
+                return version_info
+        except Exception:
+            pass  # Fall back to rosbridge
+
+    # Fall back to rosbridge detection
     # Try ROS2 detection
     ros2_request = {
         "op": "call_service",
@@ -148,16 +177,25 @@ def detect_ros_version() -> dict:
         return {"error": "Could not detect ROS version"}
 
 
-@mcp.tool(description=("Fetch available topics from the ROS bridge.\nExample:\nget_topics()"))
+@mcp.tool(description=("Fetch available topics from native ROS 2 or ROS bridge.\nExample:\nget_topics()"))
 def get_topics() -> dict:
     """
-    Fetch available topics from the ROS bridge.
+    Fetch available topics using native ROS 2 API or rosbridge fallback.
 
     Returns:
         dict: Contains two lists - 'topics' and 'types',
             or a message string if no topics are found.
     """
-    # rosbridge service call to get topic list
+    # Try native ROS 2 first
+    manager = _get_ros2_manager()
+    if manager:
+        try:
+            return manager.get_topics()
+        except Exception as e:
+            # Log error but fall back to rosbridge
+            pass
+
+    # Fall back to rosbridge service call
     message = {
         "op": "call_service",
         "service": "/rosapi/topics",
@@ -187,7 +225,7 @@ def get_topics() -> dict:
 )
 def get_topic_type(topic: str) -> dict:
     """
-    Get the message type for a specific topic.
+    Get the message type for a specific topic using native ROS 2 API or rosbridge fallback.
 
     Args:
         topic (str): The topic name (e.g., '/cmd_vel')
@@ -200,7 +238,19 @@ def get_topic_type(topic: str) -> dict:
     if not topic or not topic.strip():
         return {"error": "Topic name cannot be empty"}
 
-    # rosbridge service call to get topic type
+    # Try native ROS 2 first
+    manager = _get_ros2_manager()
+    if manager:
+        try:
+            topic_type = manager.get_topic_type(topic)
+            if topic_type:
+                return {"topic": topic, "type": topic_type}
+            else:
+                return {"error": f"Topic {topic} does not exist or has no type"}
+        except Exception:
+            pass  # Fall back to rosbridge
+
+    # Fall back to rosbridge service call
     message = {
         "op": "call_service",
         "service": "/rosapi/topic_type",
@@ -239,7 +289,7 @@ def get_topic_type(topic: str) -> dict:
 )
 def get_message_details(message_type: str) -> dict:
     """
-    Get the complete structure/definition of a message type.
+    Get the complete structure/definition of a message type using native ROS 2 API or rosbridge fallback.
 
     Args:
         message_type (str): The message type (e.g., 'geometry_msgs/Twist')
@@ -252,7 +302,18 @@ def get_message_details(message_type: str) -> dict:
     if not message_type or not message_type.strip():
         return {"error": "Message type cannot be empty"}
 
-    # rosbridge service call to get message details
+    # Try native ROS 2 first
+    manager = _get_ros2_manager()
+    if manager:
+        try:
+            details = manager.get_message_details(message_type)
+            if "error" not in details:
+                # Convert to format matching rosapi response
+                return {"message_type": message_type, "structure": {message_type: details}}
+        except Exception:
+            pass  # Fall back to rosbridge
+
+    # Fall back to rosbridge service call
     message = {
         "op": "call_service",
         "service": "/rosapi/message_details",
@@ -304,7 +365,7 @@ def get_message_details(message_type: str) -> dict:
 )
 def get_publishers_for_topic(topic: str) -> dict:
     """
-    Get list of nodes that are publishing to a specific topic.
+    Get list of nodes that are publishing to a specific topic using native ROS 2 API or rosbridge fallback.
 
     Args:
         topic (str): The topic name (e.g., '/cmd_vel')
@@ -317,7 +378,16 @@ def get_publishers_for_topic(topic: str) -> dict:
     if not topic or not topic.strip():
         return {"error": "Topic name cannot be empty"}
 
-    # rosbridge service call to get publishers
+    # Try native ROS 2 first
+    manager = _get_ros2_manager()
+    if manager:
+        try:
+            publishers = manager.get_publishers_for_topic(topic)
+            return {"topic": topic, "publishers": publishers, "publisher_count": len(publishers)}
+        except Exception:
+            pass  # Fall back to rosbridge
+
+    # Fall back to rosbridge service call
     message = {
         "op": "call_service",
         "service": "/rosapi/publishers",
@@ -353,7 +423,7 @@ def get_publishers_for_topic(topic: str) -> dict:
 )
 def get_subscribers_for_topic(topic: str) -> dict:
     """
-    Get list of nodes that are subscribed to a specific topic.
+    Get list of nodes that are subscribed to a specific topic using native ROS 2 API or rosbridge fallback.
 
     Args:
         topic (str): The topic name (e.g., '/cmd_vel')
@@ -366,7 +436,16 @@ def get_subscribers_for_topic(topic: str) -> dict:
     if not topic or not topic.strip():
         return {"error": "Topic name cannot be empty"}
 
-    # rosbridge service call to get subscribers
+    # Try native ROS 2 first
+    manager = _get_ros2_manager()
+    if manager:
+        try:
+            subscribers = manager.get_subscribers_for_topic(topic)
+            return {"topic": topic, "subscribers": subscribers, "subscriber_count": len(subscribers)}
+        except Exception:
+            pass  # Fall back to rosbridge
+
+    # Fall back to rosbridge service call
     message = {
         "op": "call_service",
         "service": "/rosapi/subscribers",
@@ -880,13 +959,22 @@ def publish_for_durations(
 @mcp.tool(description=("Get list of all available ROS services.\nExample:\nget_services()"))
 def get_services() -> dict:
     """
-    Get list of all available ROS services.
+    Get list of all available ROS services using native ROS 2 API or rosbridge fallback.
 
     Returns:
         dict: Contains list of all active services,
             or a message string if no services are found.
     """
-    # rosbridge service call to get service list
+    # Try native ROS 2 first
+    manager = _get_ros2_manager()
+    if manager:
+        try:
+            services = manager.get_services()
+            return {"services": services, "service_count": len(services)}
+        except Exception:
+            pass  # Fall back to rosbridge
+
+    # Fall back to rosbridge service call
     message = {
         "op": "call_service",
         "service": "/rosapi/services",
@@ -920,7 +1008,7 @@ def get_services() -> dict:
 )
 def get_service_type(service: str) -> dict:
     """
-    Get the service type for a specific service.
+    Get the service type for a specific service using native ROS 2 API or rosbridge fallback.
 
     Args:
         service (str): The service name (e.g., '/rosapi/topics')
@@ -933,7 +1021,19 @@ def get_service_type(service: str) -> dict:
     if not service or not service.strip():
         return {"error": "Service name cannot be empty"}
 
-    # rosbridge service call to get service type
+    # Try native ROS 2 first
+    manager = _get_ros2_manager()
+    if manager:
+        try:
+            service_type = manager.get_service_type(service)
+            if service_type:
+                return {"service": service, "type": service_type}
+            else:
+                return {"error": f"Service {service} does not exist or has no type"}
+        except Exception:
+            pass  # Fall back to rosbridge
+
+    # Fall back to rosbridge service call
     message = {
         "op": "call_service",
         "service": "/rosapi/service_type",
@@ -972,7 +1072,7 @@ def get_service_type(service: str) -> dict:
 )
 def get_service_details(service_type: str) -> dict:
     """
-    Get complete service details including request and response structures.
+    Get complete service details including request and response structures using native ROS 2 API or rosbridge fallback.
 
     Args:
         service_type (str): The service type (e.g., 'my_package/CustomService')
@@ -984,9 +1084,19 @@ def get_service_details(service_type: str) -> dict:
     if not service_type or not service_type.strip():
         return {"error": "Service type cannot be empty"}
 
+    # Try native ROS 2 first
+    manager = _get_ros2_manager()
+    if manager:
+        try:
+            details = manager.get_service_details(service_type)
+            if "error" not in details:
+                return details
+        except Exception:
+            pass  # Fall back to rosbridge
+
     result = {"service_type": service_type, "request": {}, "response": {}}
 
-    # Get both request and response details in a single WebSocket context
+    # Fall back to rosbridge - get both request and response details
     with ws_manager:
         # Get request details
         request_message = {
@@ -1279,13 +1389,22 @@ def call_service(
 @mcp.tool(description=("Get list of all currently running ROS nodes.\nExample:\nget_nodes()"))
 def get_nodes() -> dict:
     """
-    Get list of all currently running ROS nodes.
+    Get list of all currently running ROS nodes using native ROS 2 API or rosbridge fallback.
 
     Returns:
         dict: Contains list of all active nodes,
             or a message string if no nodes are found.
     """
-    # rosbridge service call to get node list
+    # Try native ROS 2 first
+    manager = _get_ros2_manager()
+    if manager:
+        try:
+            nodes = manager.get_nodes()
+            return {"nodes": nodes, "node_count": len(nodes)}
+        except Exception:
+            pass  # Fall back to rosbridge
+
+    # Fall back to rosbridge service call
     message = {
         "op": "call_service",
         "service": "/rosapi/nodes",
@@ -1321,7 +1440,7 @@ def get_nodes() -> dict:
 )
 def get_node_details(node: str) -> dict:
     """
-    Get detailed information about a specific node including its publishers, subscribers, and services.
+    Get detailed information about a specific node including its publishers, subscribers, and services using native ROS 2 API or rosbridge fallback.
 
     Args:
         node (str): The node name (e.g., '/turtlesim')
@@ -1334,6 +1453,25 @@ def get_node_details(node: str) -> dict:
     if not node or not node.strip():
         return {"error": "Node name cannot be empty"}
 
+    # Try native ROS 2 first
+    manager = _get_ros2_manager()
+    if manager:
+        try:
+            details = manager.get_node_details(node)
+            # Add node name and counts to match rosapi format
+            result = {
+                "node": node,
+                "publishers": details.get("publishing", []),
+                "subscribers": details.get("subscribing", []),
+                "services": details.get("services", []),
+                "publisher_count": len(details.get("publishing", [])),
+                "subscriber_count": len(details.get("subscribing", [])),
+                "service_count": len(details.get("services", [])),
+            }
+            return result
+        except Exception:
+            pass  # Fall back to rosbridge
+
     result = {
         "node": node,
         "publishers": [],
@@ -1344,7 +1482,7 @@ def get_node_details(node: str) -> dict:
         "service_count": 0,
     }
 
-    # rosbridge service call to get node details
+    # Fall back to rosbridge service call
     message = {
         "op": "call_service",
         "service": "/rosapi/node_details",
