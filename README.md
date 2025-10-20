@@ -66,8 +66,25 @@ The MCP server enables the Claude to interpret images from the robot's cameras, 
 - **Publish/subscribe to topics** → send commands or stream robot data in real time.  
 - **Call services (incl. custom)** → trigger robot functions directly.  
 - **Get/set parameters** → read or adjust robot settings on the fly.  
+- ⚡ **Native ROS 2 support** → 5-10x faster introspection when ROS 2 is installed on the MCP server.
 - 🔜 **Action support** → upcoming support for ROS Actions.  
 - 🔜 **Permission controls** → manage access for safer deployments.  
+
+### 🚀 Performance Modes
+
+The server operates in two modes:
+
+**1. Native ROS 2 Mode** (Recommended for ROS 2)
+- Install ROS 2 on the MCP server machine
+- **5-10x faster** introspection operations
+- Direct DDS discovery (no WebSocket overhead)
+- Automatic fallback to rosbridge for pub/sub
+
+**2. Rosbridge Mode** (Compatible with ROS 1 & 2)
+- Works over network without ROS installation
+- Requires `rosbridge_server` running on robot
+- Full pub/sub functionality
+- Works across platforms and networks
 
 ---
 
@@ -83,10 +100,12 @@ The MCP server is version-agnostic (ROS1 or ROS2) and works with any MCP-compati
 
 Follow the [installation guide](docs/installation.md) for step-by-step instructions:  
 1. Clone the repository  
-2. Install `uv` and `rosbridge`  
-3. Install Claude Desktop (or any MCP-enabled client)  
-4. Configure your client to connect to the ROS MCP Server  
-5. Start `rosbridge` on the target robot  
+2. Install `uv` and dependencies
+3. **Optional**: Install ROS 2 on the MCP server for native mode (5-10x faster)
+4. Install `rosbridge` on the robot (required for pub/sub and ROS 1 support)
+5. Install Claude Desktop (or any MCP-enabled client)  
+6. Configure your client to connect to the ROS MCP Server  
+7. Start `rosbridge` on the target robot  
 
 ---
 

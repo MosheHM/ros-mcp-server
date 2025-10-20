@@ -6,15 +6,15 @@ NOTE: This is a prototype implementation for planning purposes.
 It demonstrates how to use native ROS 2 APIs instead of rosapi.
 """
 
-from typing import Dict, List, Optional, Any
 import threading
+from typing import Any, Dict, List, Optional
 
 
 class ROS2Manager:
     """
     Manages ROS 2 node lifecycle and provides native graph introspection APIs.
     This class is designed to replace the rosapi-based functionality.
-    
+
     This implementation uses rclpy (ROS 2 Python client library) to directly
     interact with the ROS 2 graph, eliminating the need for rosbridge and rosapi.
     """
@@ -34,7 +34,7 @@ class ROS2Manager:
     def initialize(self):
         """
         Initialize ROS 2 node.
-        
+
         This must be called before using any other methods.
         Requires ROS 2 and rclpy to be installed.
         """
@@ -59,9 +59,7 @@ class ROS2Manager:
             self._initialized = True
 
         except ImportError as e:
-            raise RuntimeError(
-                f"Failed to import rclpy. Ensure ROS 2 is installed: {e}"
-            )
+            raise RuntimeError(f"Failed to import rclpy. Ensure ROS 2 is installed: {e}")
         except Exception as e:
             raise RuntimeError(f"Failed to initialize ROS 2 node: {e}")
 
@@ -92,12 +90,12 @@ class ROS2Manager:
     def get_topics(self) -> Dict[str, List[str]]:
         """
         Get all topics and their types.
-        
+
         Replaces: /rosapi/topics service call
 
         Returns:
             dict: {'topics': [...], 'types': [...]}
-            
+
         Example:
             {
                 'topics': ['/cmd_vel', '/odom', '/scan'],
@@ -122,7 +120,7 @@ class ROS2Manager:
     def get_topic_type(self, topic: str) -> Optional[str]:
         """
         Get the message type for a specific topic.
-        
+
         Replaces: /rosapi/topic_type service call
 
         Args:
@@ -130,7 +128,7 @@ class ROS2Manager:
 
         Returns:
             Message type string or None if topic doesn't exist
-            
+
         Example:
             get_topic_type('/cmd_vel') -> 'geometry_msgs/msg/Twist'
         """
@@ -148,7 +146,7 @@ class ROS2Manager:
     def get_publishers_for_topic(self, topic: str) -> List[str]:
         """
         Get list of nodes publishing to a topic.
-        
+
         Replaces: /rosapi/publishers service call
 
         Args:
@@ -156,7 +154,7 @@ class ROS2Manager:
 
         Returns:
             List of node names
-            
+
         Example:
             get_publishers_for_topic('/cmd_vel') -> ['/teleop_keyboard', '/nav_node']
         """
@@ -173,7 +171,7 @@ class ROS2Manager:
     def get_subscribers_for_topic(self, topic: str) -> List[str]:
         """
         Get list of nodes subscribed to a topic.
-        
+
         Replaces: /rosapi/subscribers service call
 
         Args:
@@ -181,7 +179,7 @@ class ROS2Manager:
 
         Returns:
             List of node names
-            
+
         Example:
             get_subscribers_for_topic('/cmd_vel') -> ['/robot_driver']
         """
@@ -200,12 +198,12 @@ class ROS2Manager:
     def get_services(self) -> List[str]:
         """
         Get all service names.
-        
+
         Replaces: /rosapi/services service call
 
         Returns:
             List of service names
-            
+
         Example:
             get_services() -> ['/set_parameters', '/get_parameters', '/spawn_entity']
         """
@@ -221,7 +219,7 @@ class ROS2Manager:
     def get_service_type(self, service: str) -> Optional[str]:
         """
         Get the service type for a specific service.
-        
+
         Replaces: /rosapi/service_type service call
 
         Args:
@@ -229,7 +227,7 @@ class ROS2Manager:
 
         Returns:
             Service type string or None if service doesn't exist
-            
+
         Example:
             get_service_type('/spawn_entity') -> 'gazebo_msgs/srv/SpawnEntity'
         """
@@ -249,12 +247,12 @@ class ROS2Manager:
     def get_nodes(self) -> List[str]:
         """
         Get all node names.
-        
+
         Replaces: /rosapi/nodes service call
 
         Returns:
             List of node names
-            
+
         Example:
             get_nodes() -> ['/turtlesim', '/teleop_keyboard', '/mcp_ros2_node']
         """
@@ -268,9 +266,9 @@ class ROS2Manager:
     def get_node_details(self, node_name: str) -> Dict:
         """
         Get details about a specific node.
-        
+
         Replaces: /rosapi/node_details service call
-        
+
         Note: This requires aggregating information from multiple native APIs
         since ROS 2 doesn't have a single "node_details" API.
 
@@ -279,7 +277,7 @@ class ROS2Manager:
 
         Returns:
             Dictionary with publishers, subscribers, and services
-            
+
         Example:
             get_node_details('/turtlesim') -> {
                 'publishing': ['/turtle1/pose', '/turtle1/color_sensor'],
@@ -324,9 +322,9 @@ class ROS2Manager:
     def get_message_details(self, message_type: str) -> Dict:
         """
         Get message structure details.
-        
+
         Replaces: /rosapi/message_details service call
-        
+
         Uses rosidl_runtime_py for message type introspection.
 
         Args:
@@ -334,7 +332,7 @@ class ROS2Manager:
 
         Returns:
             Dictionary with message structure
-            
+
         Example:
             get_message_details('geometry_msgs/msg/Twist') -> {
                 'type': 'geometry_msgs/msg/Twist',
@@ -366,7 +364,7 @@ class ROS2Manager:
     def get_service_details(self, service_type: str) -> Dict:
         """
         Get service request and response structure.
-        
+
         Replaces: /rosapi/service_request_details and /rosapi/service_response_details
 
         Args:
@@ -374,7 +372,7 @@ class ROS2Manager:
 
         Returns:
             Dictionary with request and response structures
-            
+
         Example:
             get_service_details('std_srvs/srv/SetBool') -> {
                 'service_type': 'std_srvs/srv/SetBool',
@@ -424,7 +422,7 @@ class ROS2Manager:
     def get_parameter(self, node_name: str, param_name: str) -> Optional[Any]:
         """
         Get a parameter from a node.
-        
+
         Uses native ROS 2 parameter service calls.
         Replaces: /rosapi/get_param
 
@@ -434,7 +432,7 @@ class ROS2Manager:
 
         Returns:
             Parameter value or None
-            
+
         Example:
             get_parameter('/my_node', 'max_velocity') -> 1.5
         """
@@ -486,12 +484,12 @@ class ROS2Manager:
     def get_ros_version(self) -> Dict[str, str]:
         """
         Get ROS version and distribution.
-        
+
         Replaces: /rosapi/get_ros_version
 
         Returns:
             Dictionary with version and distro
-            
+
         Example:
             get_ros_version() -> {'version': '2', 'distro': 'humble'}
         """

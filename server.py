@@ -69,7 +69,7 @@ def _get_ros2_manager():
         try:
             ros2_manager = ROS2Manager()
             ros2_manager.initialize()
-        except Exception as e:
+        except Exception:
             # If ROS 2 is not available, return None and fall back to rosapi
             return None
     return ros2_manager
@@ -195,7 +195,9 @@ def detect_ros_version() -> dict:
         return {"error": "Could not detect ROS version"}
 
 
-@mcp.tool(description=("Fetch available topics from native ROS 2 or ROS bridge.\nExample:\nget_topics()"))
+@mcp.tool(
+    description=("Fetch available topics from native ROS 2 or ROS bridge.\nExample:\nget_topics()")
+)
 def get_topics() -> dict:
     """
     Fetch available topics using native ROS 2 API or rosbridge fallback.
@@ -209,7 +211,7 @@ def get_topics() -> dict:
     if manager:
         try:
             return manager.get_topics()
-        except Exception as e:
+        except Exception:
             # Log error but fall back to rosbridge
             pass
 
@@ -459,7 +461,11 @@ def get_subscribers_for_topic(topic: str) -> dict:
     if manager:
         try:
             subscribers = manager.get_subscribers_for_topic(topic)
-            return {"topic": topic, "subscribers": subscribers, "subscriber_count": len(subscribers)}
+            return {
+                "topic": topic,
+                "subscribers": subscribers,
+                "subscriber_count": len(subscribers),
+            }
         except Exception:
             pass  # Fall back to rosbridge
 
@@ -515,17 +521,17 @@ def inspect_all_topics() -> dict:
             topics_info = manager.get_topics()
             topics = topics_info.get("topics", [])
             types = topics_info.get("types", [])
-            
+
             topic_details = {}
             topic_errors = []
-            
+
             for i, topic in enumerate(topics):
                 topic_type = types[i] if i < len(types) else "unknown"
-                
+
                 try:
                     publishers = manager.get_publishers_for_topic(topic)
                     subscribers = manager.get_subscribers_for_topic(topic)
-                    
+
                     topic_details[topic] = {
                         "type": topic_type,
                         "publishers": publishers,
@@ -535,7 +541,7 @@ def inspect_all_topics() -> dict:
                     }
                 except Exception as e:
                     topic_errors.append(f"Topic {topic}: {str(e)}")
-            
+
             return {
                 "total_topics": len(topics),
                 "topics": topic_details,
@@ -1283,7 +1289,7 @@ def inspect_all_services() -> dict:
             services = manager.get_services()
             service_details = {}
             service_errors = []
-            
+
             for service in services:
                 try:
                     service_type = manager.get_service_type(service)
@@ -1296,7 +1302,7 @@ def inspect_all_services() -> dict:
                     }
                 except Exception as e:
                     service_errors.append(f"Service {service}: {str(e)}")
-            
+
             return {
                 "total_services": len(services),
                 "services": service_details,
@@ -1633,14 +1639,14 @@ def inspect_all_nodes() -> dict:
             nodes = manager.get_nodes()
             node_details = {}
             node_errors = []
-            
+
             for node in nodes:
                 try:
                     details = manager.get_node_details(node)
                     publishers = details.get("publishing", [])
                     subscribers = details.get("subscribing", [])
                     services = details.get("services", [])
-                    
+
                     node_details[node] = {
                         "publishers": publishers,
                         "subscribers": subscribers,
@@ -1651,7 +1657,7 @@ def inspect_all_nodes() -> dict:
                     }
                 except Exception as e:
                     node_errors.append(f"Node {node}: {str(e)}")
-            
+
             return {
                 "total_nodes": len(nodes),
                 "nodes": node_details,
