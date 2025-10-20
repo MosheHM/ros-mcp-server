@@ -1,3 +1,21 @@
+"""
+ROS MCP Server - Connect AI Language Models with ROS/ROS2 Robots
+
+This server implements a hybrid approach for ROS introspection:
+- Native ROS 2 APIs (via rclpy) are used when available for better performance
+- Automatic fallback to rosbridge/rosapi for compatibility and pub/sub operations
+- Backward compatible with existing rosbridge deployments
+
+Key features:
+- Topic, service, and node introspection
+- Message type details and service definitions
+- Publish/subscribe to topics
+- Call services
+- Parameter management (via rosbridge)
+
+For native ROS 2 support, ensure ROS 2 is installed on the MCP server machine.
+"""
+
 import argparse
 import io
 import json
@@ -474,14 +492,14 @@ def get_subscribers_for_topic(topic: str) -> dict:
 
 @mcp.tool(
     description=(
-        "Get comprehensive information about all ROS topics including publishers, subscribers, and message types. Note that this may take time to execute when three are a large number of topics since it queries each one by one under the hood. \n"
+        "Get comprehensive information about all ROS topics including publishers, subscribers, and message types. Note that this may take time to execute when there are a large number of topics since it queries each one by one under the hood. \n"
         "Example:\n"
         "inspect_all_topics()"
     )
 )
 def inspect_all_topics() -> dict:
     """
-    Get comprehensive information about all ROS topics including publishers, subscribers, and message types.
+    Get comprehensive information about all ROS topics including publishers, subscribers, and message types using native ROS 2 API or rosbridge fallback.
 
     Returns:
         dict: Contains detailed information about all topics including:
@@ -490,7 +508,43 @@ def inspect_all_topics() -> dict:
             - Subscribers for each topic
             - Connection counts and statistics
     """
-    # First get all topics
+    # Try native ROS 2 first (much faster!)
+    manager = _get_ros2_manager()
+    if manager:
+        try:
+            topics_info = manager.get_topics()
+            topics = topics_info.get("topics", [])
+            types = topics_info.get("types", [])
+            
+            topic_details = {}
+            topic_errors = []
+            
+            for i, topic in enumerate(topics):
+                topic_type = types[i] if i < len(types) else "unknown"
+                
+                try:
+                    publishers = manager.get_publishers_for_topic(topic)
+                    subscribers = manager.get_subscribers_for_topic(topic)
+                    
+                    topic_details[topic] = {
+                        "type": topic_type,
+                        "publishers": publishers,
+                        "subscribers": subscribers,
+                        "publisher_count": len(publishers),
+                        "subscriber_count": len(subscribers),
+                    }
+                except Exception as e:
+                    topic_errors.append(f"Topic {topic}: {str(e)}")
+            
+            return {
+                "total_topics": len(topics),
+                "topics": topic_details,
+                "topic_errors": topic_errors,
+            }
+        except Exception:
+            pass  # Fall back to rosbridge
+
+    # Fall back to rosbridge implementation
     topics_message = {
         "op": "call_service",
         "service": "/rosapi/topics",
@@ -1209,20 +1263,49 @@ def get_service_providers(service: str) -> dict:
 
 @mcp.tool(
     description=(
-        "Get comprehensive information about all services including types and providers. Note that this may take time to execute when three are a large number of services since it queries each one by one under the hood. \n"
+        "Get comprehensive information about all services including types and providers. Note that this may take time to execute when there are a large number of services since it queries each one by one under the hood. \n"
         "Example:\n"
         "inspect_all_services()"
     )
 )
 def inspect_all_services() -> dict:
     """
-    Get comprehensive information about all services including types and providers.
+    Get comprehensive information about all services including types and providers using native ROS 2 API or rosbridge fallback.
 
     Returns:
         dict: Contains detailed information about all services,
             including service names, types, and provider nodes.
     """
-    # First get all services
+    # Try native ROS 2 first (much faster for getting service list and types!)
+    manager = _get_ros2_manager()
+    if manager:
+        try:
+            services = manager.get_services()
+            service_details = {}
+            service_errors = []
+            
+            for service in services:
+                try:
+                    service_type = manager.get_service_type(service)
+                    # Note: ROS 2 doesn't have a direct "get service provider" API
+                    # This is a known limitation
+                    service_details[service] = {
+                        "type": service_type if service_type else "unknown",
+                        "providers": [],  # Not available in native ROS 2
+                        "provider_count": 0,
+                    }
+                except Exception as e:
+                    service_errors.append(f"Service {service}: {str(e)}")
+            
+            return {
+                "total_services": len(services),
+                "services": service_details,
+                "service_errors": service_errors,
+            }
+        except Exception:
+            pass  # Fall back to rosbridge
+
+    # Fall back to rosbridge implementation
     services_message = {
         "op": "call_service",
         "service": "/rosapi/services",
@@ -1533,7 +1616,7 @@ def get_node_details(node: str) -> dict:
 )
 def inspect_all_nodes() -> dict:
     """
-    Get comprehensive information about all ROS nodes including their publishers, subscribers, and services.
+    Get comprehensive information about all ROS nodes including their publishers, subscribers, and services using native ROS 2 API or rosbridge fallback.
 
     Returns:
         dict: Contains detailed information about all nodes including:
@@ -1543,7 +1626,41 @@ def inspect_all_nodes() -> dict:
             - Services provided by each node
             - Connection counts and statistics
     """
-    # First get all nodes
+    # Try native ROS 2 first (much faster!)
+    manager = _get_ros2_manager()
+    if manager:
+        try:
+            nodes = manager.get_nodes()
+            node_details = {}
+            node_errors = []
+            
+            for node in nodes:
+                try:
+                    details = manager.get_node_details(node)
+                    publishers = details.get("publishing", [])
+                    subscribers = details.get("subscribing", [])
+                    services = details.get("services", [])
+                    
+                    node_details[node] = {
+                        "publishers": publishers,
+                        "subscribers": subscribers,
+                        "services": services,
+                        "publisher_count": len(publishers),
+                        "subscriber_count": len(subscribers),
+                        "service_count": len(services),
+                    }
+                except Exception as e:
+                    node_errors.append(f"Node {node}: {str(e)}")
+            
+            return {
+                "total_nodes": len(nodes),
+                "nodes": node_details,
+                "node_errors": node_errors,
+            }
+        except Exception:
+            pass  # Fall back to rosbridge
+
+    # Fall back to rosbridge implementation
     nodes_message = {
         "op": "call_service",
         "service": "/rosapi/nodes",
