@@ -6,8 +6,8 @@ NOTE: This is a prototype implementation for planning purposes.
 It demonstrates how to use native ROS 2 APIs instead of rosapi.
 """
 
-from typing import Dict, List, Optional, Any
 import threading
+from typing import Any, Dict, List, Optional
 
 
 class ROS2Manager:
