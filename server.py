@@ -10,27 +10,18 @@ from fastmcp.utilities.types import Image
 from PIL import Image as PILImage
 
 from utils.config_utils import get_robot_specifications, parse_robot_config
+from utils.env_config import env_config
 from utils.network_utils import ping_ip_and_port
 from utils.websocket_manager import WebSocketManager, parse_image, parse_json
 
-# ROS bridge connection settings
-ROSBRIDGE_IP = "127.0.0.1"  # Default is localhost. Replace with your local IPor set using the LLM.
-ROSBRIDGE_PORT = (
-    9090  # Rosbridge default is 9090. Replace with your rosbridge port or set using the LLM.
-)
+# ROS bridge connection settings (loaded from environment)
+ROSBRIDGE_IP = env_config.rosbridge_ip
+ROSBRIDGE_PORT = env_config.rosbridge_port
 
-# MCP transport settings
-MCP_TRANSPORT = os.getenv("MCP_TRANSPORT", "stdio").lower()  # Default is stdio.
-
-# MCP connection settings (streamable-http)
-MCP_HOST = os.getenv(
-    "MCP_HOST", "127.0.0.1"
-)  # Default is localhost. Replace with the address of your remote MCP server.
-
-# MCP port settings (default=9000)
-MCP_PORT = int(
-    os.getenv("MCP_PORT", "9000")
-)  # Default is 9000. Replace with the port of your remote MCP server.
+# MCP transport settings (loaded from environment)
+MCP_TRANSPORT = env_config.mcp_transport
+MCP_HOST = env_config.mcp_host
+MCP_PORT = env_config.mcp_port
 
 # Initialize MCP server and WebSocket manager
 mcp = FastMCP("ros-mcp-server")
