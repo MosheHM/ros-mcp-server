@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  # ROS MCP Server for development
+  ros-mcp-server-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ros-mcp-server-dev
+    environment:
+      - ENVIRONMENT=development
+      - MCP_TRANSPORT=${MCP_TRANSPORT:-stdio}
+      - MCP_HOST=127.0.0.1
+      - MCP_PORT=9000
+      - ROSBRIDGE_IP=${ROSBRIDGE_IP:-127.0.0.1}
+      - ROSBRIDGE_PORT=${ROSBRIDGE_PORT:-9090}
+      - LOG_LEVEL=${LOG_LEVEL:-DEBUG}
+      - DEBUG=true
+    volumes:
+      # Mount source code for live development
+      - .:/app
+      - ./config:/app/config
+      - ./utils:/app/utils
+    ports:
+      - "9000:9000"
+    network_mode: host
+    stdin_open: true
+    tty: true
+    restart: "no"
+    command: python server.py --transport http --host 127.0.0.1 --port 9000

@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  # ROS MCP Server
+  ros-mcp-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ros-mcp-server
+    environment:
+      - ENVIRONMENT=production
+      - MCP_TRANSPORT=${MCP_TRANSPORT:-http}
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=9000
+      - ROSBRIDGE_IP=${ROSBRIDGE_IP:-127.0.0.1}
+      - ROSBRIDGE_PORT=${ROSBRIDGE_PORT:-9090}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - DEBUG=false
+    volumes:
+      - ./config:/app/config:ro
+      - ./utils:/app/utils:ro
+    networks:
+      - ros-mcp-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    # Only expose internally, not to host
+    expose:
+      - "9000"
+
+  # Nginx Gateway
+  nginx:
+    image: nginx:alpine
+    container_name: ros-mcp-gateway
+    ports:
+      - "80:80"
+      # Uncomment for HTTPS
+      # - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      # Uncomment for HTTPS and provide SSL certificates
+      # - ./nginx/nginx-ssl.conf:/etc/nginx/conf.d/default.conf:ro
+      # - ./nginx/ssl:/etc/nginx/ssl:ro
+      - nginx-logs:/var/log/nginx
+    depends_on:
+      - ros-mcp-server
+    networks:
+      - ros-mcp-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  ros-mcp-network:
+    driver: bridge
+
+volumes:
+  nginx-logs:
