@@ -1,6 +1,6 @@
 [project]
 name = "ros-mcp"
-version = "2.1.6"
+version = "3.0.0"
 description = "Connect AI Language Models with Robots on ROS using MCP"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -21,6 +21,8 @@ dependencies = [
     "pillow>=11.3.0",
     "python-dotenv>=1.0.0",
     "websocket-client>=1.8.0",
+    # ROS 2 native support - replaces rosapi dependency
+    # Note: These require ROS 2 to be installed on the system
 ]
 
 [project.optional-dependencies]
